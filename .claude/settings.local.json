@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install:*)",
+      "Bash(ollama list:*)",
+      "Bash(mysql:*)",
+      "Bash(python:*)",
+      "Bash(ollama ps:*)",
+      "Bash(del test_fixed_chat.py final_test.py quick_test.py test_natural_conversation.py)",
+      "Bash(rm:*)",
+      "Bash(find:*)",
+      "Bash(del \"C:\\tracking\\pcli\\clokai\\test_validation.py\")"
+    ],
+    "deny": []
+  }
+}

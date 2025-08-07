@@ -1,0 +1,97 @@
+Here’s an improved and clarified version of your requirements, with emphasis on **hybrid mode for file editing**, not just raw Python code:
+
+---
+
+## 💡 Updated Requirement: Hybrid CLI Coding Agent (Structured + Flexible)
+
+Your CLI coding agent must operate in **hybrid mode**, meaning:
+
+> ✅ Use **natural language** for communication and reasoning,
+> ✅ Use **structured tool calls** (like `edit_file`) for actual file changes.
+
+---
+
+## 🔧 What This Means Practically
+
+### 🔹 1. **Natural Language ≠ File Writes**
+
+* Let the LLM **discuss**, **reason**, and **explain** in natural language.
+* But **never trust natural language outputs for file changes**.
+* File modifications must **always go through a dedicated structured tool**.
+
+---
+
+### 🔹 2. **Mandatory: Structured Tool for File Editing**
+
+You must introduce an `edit_file` tool (if not already present), designed specifically for **safe, contextual file modification**, like Claude Code does.
+
+#### ✅ Requirements for `edit_file` Tool:
+
+```json
+{
+  "name": "edit_file",
+  "description": "Edit specific lines or sections of a file safely.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "path": { "type": "string", "description": "File path to modify" },
+      "action": {
+        "type": "string",
+        "enum": ["insert_before", "insert_after", "replace_range", "append_to_end"],
+        "description": "Edit operation type"
+      },
+      "content": { "type": "string", "description": "The new content to write" },
+      "match_text": { "type": "string", "description": "Line or pattern to anchor the edit", "optional": true },
+      "start_line": { "type": "integer", "description": "Starting line number (for replacements)", "optional": true },
+      "end_line": { "type": "integer", "description": "Ending line number (for replacements)", "optional": true }
+    },
+    "required": ["path", "action", "content"]
+  }
+}
+```
+
+This ensures:
+
+* Edits are **surgical**, not blunt overwrites.
+* You can **trace, test, and revert** changes easily.
+* The LLM can **reason in text**, but file actions are **fully structured and auditable**.
+
+---
+
+### 🔹 3. **Prompt Engineering Must Enforce This Workflow**
+
+Update your system prompt to explicitly instruct the model:
+
+```text
+- You are a CLI code assistant.
+- NEVER write file-changing code directly into your natural language response.
+- ONLY use the `edit_file` tool (or similar) to make file modifications.
+- You may explain your reasoning first, but all code changes must be submitted via tool calls.
+- You may use the `write_file` tool for new files, but never for editing existing files.
+```
+
+---
+
+### 🧠 Bonus: Inline Patching Mode (Optional Enhancement)
+
+If you want to go Claude-level smart, you can implement a diff-style patcher:
+
+* LLM suggests a "before" and "after" chunk.
+* Your tool validates the "before" block exists before applying the "after".
+
+But that's extra polish — not essential to get hybrid mode working.
+
+---
+
+## ✅ Summary
+
+| Task           | Approach                                                       |
+| -------------- | -------------------------------------------------------------- |
+| Code Reasoning | Free-form natural language                                     |
+| File Creation  | `write_file` tool                                              |
+| File Editing   | **`edit_file` tool (mandatory)**                               |
+| Prompting      | Enforce hybrid mode: language for reasoning, tools for actions |
+
+---
+
+Want me to generate a working version of `edit_file.py` that supports line-based or match-based edits?
