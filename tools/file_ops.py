@@ -1,122 +1,51 @@
 import time
 from pathlib import Path
 from config import PROJECT_ROOT
-from tracking.tracker import tracker
 
 def read_file(path):
-    start_time = time.time()
-    
+    """Read file contents - tracking handled by smart_tool_system"""
     try:
         full_path = Path(PROJECT_ROOT) / path
         if not full_path.resolve().is_file():
-            result = f"File {path} not found."
-            execution_time = int((time.time() - start_time) * 1000)
-            
-            # Track tool call
-            tracker.track_tool_call(
-                "read_file", 
-                {"path": path}, 
-                result, 
-                execution_time,
-                status="error",
-                error_message="File not found"
-            )
-            return result
+            return f"File {path} not found."
         
         with open(full_path, "r", encoding='utf-8') as f:
             content = f.read()
         
-        execution_time = int((time.time() - start_time) * 1000)
-        
-        # Track successful tool call
-        tracker.track_tool_call(
-            "read_file", 
-            {"path": path}, 
-            f"Successfully read {len(content)} characters", 
-            execution_time
-        )
-        
         return content
         
     except Exception as e:
-        execution_time = int((time.time() - start_time) * 1000)
-        error_msg = f"Error reading file {path}: {str(e)}"
-        
-        # Track failed tool call
-        tracker.track_tool_call(
-            "read_file", 
-            {"path": path}, 
-            error_msg, 
-            execution_time,
-            status="error",
-            error_message=str(e)
-        )
-        
-        return error_msg
+        return f"Error reading file {path}: {str(e)}"
 
 def write_file(path, content):
     """
     Writes content to a file, creating it if it doesn't exist or overwriting it if it does.
+    Tracking handled by smart_tool_system.
 
     Args:
         path: File path relative to PROJECT_ROOT.
         content: The content to write to the file.
     """
-    start_time = time.time()
-    
     try:
         full_path = Path(PROJECT_ROOT) / path
         
         # Ensure parent directory exists
         full_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # Read original content if file exists
-        original_content = ""
-        if full_path.exists():
-            with open(full_path, "r", encoding='utf-8') as f:
-                original_content = f.read()
+        # Check if file existed before
+        file_existed = full_path.exists()
         
         # Write new content
         with open(full_path, "w", encoding='utf-8') as f:
             f.write(content)
         
-        execution_time = int((time.time() - start_time) * 1000)
-        
-        if original_content:
-            result = f"File {path} updated successfully."
+        if file_existed:
+            return f"File {path} updated successfully."
         else:
-            result = f"File {path} created successfully."
+            return f"File {path} created successfully."
             
-        # Track successful tool call
-        tool_call_id = tracker.track_tool_call(
-            "write_file", 
-            {"path": path, "content": content[:100] + "..." if len(content) > 100 else content}, 
-            result, 
-            execution_time
-        )
-        
-        # Track file snapshots
-        if tool_call_id:
-            tracker.track_file_snapshot(tool_call_id, str(full_path), "before", original_content)
-            tracker.track_file_snapshot(tool_call_id, str(full_path), "after", content)
-            
-        return result
-        
     except Exception as e:
-        execution_time = int((time.time() - start_time) * 1000)
-        error_msg = f"Error writing file {path}: {str(e)}"
-        
-        # Track failed tool call
-        tracker.track_tool_call(
-            "write_file", 
-            {"path": path, "content": content[:100] + "..." if len(content) > 100 else content}, 
-            error_msg, 
-            execution_time,
-            status="error",
-            error_message=str(e)
-        )
-        
-        return error_msg
+        return f"Error writing file {path}: {str(e)}"
 
 def edit_file(path, action, content, match_text=None, start_line=None, end_line=None):
     """
@@ -130,23 +59,11 @@ def edit_file(path, action, content, match_text=None, start_line=None, end_line=
         start_line: Starting line number for replace operations (1-based, optional)
         end_line: Ending line number for replace operations (1-based, optional)
     """
-    start_time = time.time()
-    
     try:
         full_path = Path(PROJECT_ROOT) / path
         
         if not full_path.exists():
-            result = f"File {path} not found."
-            execution_time = int((time.time() - start_time) * 1000)
-            tracker.track_tool_call(
-                "edit_file",
-                {"path": path, "action": action, "content": content[:100] + "..." if len(content) > 100 else content},
-                result,
-                execution_time,
-                status="error",
-                error_message="File not found"
-            )
-            return result
+            return f"File {path} not found."
         
         # Read original content
         with open(full_path, "r", encoding='utf-8') as f:
@@ -223,36 +140,7 @@ def edit_file(path, action, content, match_text=None, start_line=None, end_line=
         with open(full_path, "w", encoding='utf-8') as f:
             f.write(new_content)
         
-        execution_time = int((time.time() - start_time) * 1000)
-        result = f"File {path} edited successfully using {action} operation."
-        
-        # Track successful tool call
-        tool_call_id = tracker.track_tool_call(
-            "edit_file",
-            {"path": path, "action": action, "content": content[:100] + "..." if len(content) > 100 else content},
-            result,
-            execution_time
-        )
-        
-        # Track file snapshots
-        if tool_call_id:
-            tracker.track_file_snapshot(tool_call_id, str(full_path), "before", original_content)
-            tracker.track_file_snapshot(tool_call_id, str(full_path), "after", new_content)
-        
-        return result
+        return f"File {path} edited successfully using {action} operation."
         
     except Exception as e:
-        execution_time = int((time.time() - start_time) * 1000)
-        error_msg = f"Error editing file {path}: {str(e)}"
-        
-        # Track failed tool call
-        tracker.track_tool_call(
-            "edit_file",
-            {"path": path, "action": action, "content": content[:100] + "..." if len(content) > 100 else content},
-            error_msg,
-            execution_time,
-            status="error",
-            error_message=str(e)
-        )
-        
-        return error_msg
+        return f"Error editing file {path}: {str(e)}"

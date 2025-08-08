@@ -26,8 +26,22 @@ def clean_response(response):
     
     return response
 
-def call_llm(messages, max_retries=2):
+def count_tokens(text):
+    """Simple token counting - approximates tokens as words * 1.3"""
+    if not text:
+        return 0
+    # Rough approximation: split by spaces and multiply by 1.3
+    return int(len(text.split()) * 1.3)
+
+def call_llm(messages, max_retries=2, call_type="main", call_sequence=1):
     """Call Ollama LLM with response cleaning and error handling"""
+    
+    # Extract system prompt for tracking
+    system_prompt = ""
+    for msg in messages:
+        if msg["role"] == "system":
+            system_prompt = msg["content"]
+            break
     
     # Convert messages to prompt for Ollama API
     prompt = ""
@@ -67,32 +81,64 @@ def call_llm(messages, max_retries=2):
                     logger.warning(f"Empty response on attempt {attempt + 1}, retrying...")
                     continue
                 else:
-                    return "I apologize, but I'm having trouble generating a proper response. Please try again."
+                    return "I apologize, but I'm having trouble generating a proper response. Please try again.", count_tokens(prompt), 0
             
-            return cleaned_response
+            # Count tokens for tracking
+            input_tokens = count_tokens(prompt)
+            output_tokens = count_tokens(cleaned_response)
+            
+            # Track the LLM call
+            try:
+                from tracking.tracker import tracker
+                if tracker.current_interaction_id:  # Only track if there's an active interaction
+                    processing_time_ms = 0  # Will be calculated properly in smart_tool_system
+                    tracker.track_llm_call(
+                        call_type=call_type,
+                        full_prompt=prompt,
+                        system_prompt=system_prompt,
+                        conversation_context=messages,
+                        llm_response=cleaned_response,
+                        model_used=MODEL_NAME,
+                        processing_time_ms=processing_time_ms,
+                        token_count_input=input_tokens,
+                        token_count_output=output_tokens,
+                        call_sequence=call_sequence
+                    )
+            except Exception as e:
+                # Don't fail if tracking fails
+                pass
+            
+            return cleaned_response, input_tokens, output_tokens
             
         except requests.exceptions.Timeout:
             if attempt < max_retries:
                 logger.warning(f"Request timeout on attempt {attempt + 1}, retrying...")
                 continue
             else:
-                return "Request timed out. The model may be overloaded. Please try again."
+                return "Request timed out. The model may be overloaded. Please try again.", count_tokens(prompt), 0
                 
         except requests.exceptions.RequestException as e:
             if attempt < max_retries:
                 logger.warning(f"Request error on attempt {attempt + 1}: {e}, retrying...")
                 continue
             else:
-                return f"Error connecting to model: {e}"
+                return f"Error connecting to model: {e}", count_tokens(prompt), 0
                 
         except Exception as e:
             logger.error(f"Unexpected error: {e}")
-            return f"Unexpected error occurred: {e}"
+            return f"Unexpected error occurred: {e}", count_tokens(prompt), 0
     
-    return "Failed to get response after multiple attempts."
+    return "Failed to get response after multiple attempts.", count_tokens(prompt), 0
 
-def call_llm_stream(messages, max_retries=2):
+def call_llm_stream(messages, max_retries=2, call_type="main", call_sequence=1):
     """Call Ollama LLM with streaming response"""
+    
+    # Extract system prompt for tracking
+    system_prompt = ""
+    for msg in messages:
+        if msg["role"] == "system":
+            system_prompt = msg["content"]
+            break
     
     # Convert messages to prompt for Ollama API
     prompt = ""
@@ -180,26 +226,51 @@ def call_llm_stream(messages, max_retries=2):
                     logger.warning(f"Empty response on attempt {attempt + 1}, retrying...")
                     continue
                 else:
-                    return "I apologize, but I'm having trouble generating a proper response. Please try again."
+                    return "I apologize, but I'm having trouble generating a proper response. Please try again.", count_tokens(prompt), 0
             
-            return cleaned_response
+            # Count tokens for tracking
+            input_tokens = count_tokens(prompt)
+            output_tokens = count_tokens(cleaned_response)
+            
+            # Track the LLM call
+            try:
+                from tracking.tracker import tracker
+                if tracker.current_interaction_id:  # Only track if there's an active interaction
+                    processing_time_ms = 0  # Will be calculated properly in smart_tool_system
+                    tracker.track_llm_call(
+                        call_type=call_type,
+                        full_prompt=prompt,
+                        system_prompt=system_prompt,
+                        conversation_context=messages,
+                        llm_response=cleaned_response,
+                        model_used=MODEL_NAME,
+                        processing_time_ms=processing_time_ms,
+                        token_count_input=input_tokens,
+                        token_count_output=output_tokens,
+                        call_sequence=call_sequence
+                    )
+            except Exception as e:
+                # Don't fail if tracking fails
+                pass
+            
+            return cleaned_response, input_tokens, output_tokens
             
         except requests.exceptions.Timeout:
             if attempt < max_retries:
                 logger.warning(f"Request timeout on attempt {attempt + 1}, retrying...")
                 continue
             else:
-                return "Request timed out. The model may be overloaded. Please try again."
+                return "Request timed out. The model may be overloaded. Please try again.", count_tokens(prompt), 0
                 
         except requests.exceptions.RequestException as e:
             if attempt < max_retries:
                 logger.warning(f"Request error on attempt {attempt + 1}: {e}, retrying...")
                 continue
             else:
-                return f"Error connecting to model: {e}"
+                return f"Error connecting to model: {e}", count_tokens(prompt), 0
                 
         except Exception as e:
             logger.error(f"Unexpected error: {e}")
-            return f"Unexpected error occurred: {e}"
+            return f"Unexpected error occurred: {e}", count_tokens(prompt), 0
     
-    return "Failed to get response after multiple attempts."
+    return "Failed to get response after multiple attempts.", count_tokens(prompt), 0

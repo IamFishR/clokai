@@ -16,7 +16,12 @@
       "Bash(cp:*)",
       "Bash(del debug_tool_parsing.py test_enhanced_intent.py test_smart_system.py)",
       "Bash(timeout:*)",
-      "Bash(del test_tool_system.py test_direct_tools.py)"
+      "Bash(del test_tool_system.py test_direct_tools.py)",
+      "Bash(del test_ui_improvements.py)",
+      "Bash(del test_textual.py test_tui_simple.py)",
+      "Bash(del test_cli.py)",
+      "Bash(del test_tracking_implementation.py)",
+      "Bash(grep:*)"
     ],
     "deny": []
   }

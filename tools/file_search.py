@@ -7,13 +7,57 @@ from typing import List, Dict, Any
 from config import PROJECT_ROOT
 from tracking.tracker import tracker
 
-def find_files(pattern: str = "*", search_type: str = "name", max_results: int = 100) -> str:
+def _auto_detect_search_type(pattern: str) -> str:
+    """
+    Auto-detect the best search type based on pattern characteristics
+    """
+    # Check for regex patterns
+    regex_indicators = ['.', '*', '+', '?', '^', '$', '[', ']', '(', ')', '|', '\\']
+    if any(indicator in pattern for indicator in regex_indicators):
+        # If it has glob-style wildcards only, use glob
+        if '*' in pattern or '?' in pattern:
+            # Check if it's only simple glob patterns (no regex metacharacters)
+            simple_glob = all(char not in pattern for char in ['.', '+', '^', '$', '[', ']', '(', ')', '|', '\\'])
+            if simple_glob:
+                return "glob"
+        return "regex"
+    
+    # Simple text search
+    return "name"
+
+def _get_search_suggestions(pattern: str, search_type: str) -> str:
+    """
+    Provide helpful suggestions when no files are found
+    """
+    suggestions = []
+    
+    # If using name search with regex-like pattern
+    if search_type == "name" and any(char in pattern for char in ['.', '*', '+', '?', '^', '$']):
+        suggestions.append(f"\nTry: find_files('{pattern}', 'regex') for regex matching")
+        if '*' in pattern or '?' in pattern:
+            suggestions.append(f"Try: find_files('{pattern}', 'glob') for glob matching")
+    
+    # If using regex with simple pattern
+    if search_type == "regex" and not any(char in pattern for char in ['.', '*', '+', '?', '^', '$', '[', ']']):
+        suggestions.append(f"\nTry: find_files('{pattern}', 'name') for simple text matching")
+    
+    # Common patterns
+    if "test" in pattern.lower():
+        suggestions.append("\nCommon test file patterns:")
+        suggestions.append("- find_files('test', 'name') for files containing 'test'")
+        suggestions.append("- find_files('test*', 'glob') for files starting with 'test'")
+        suggestions.append("- find_files('test.*', 'regex') for files starting with 'test'")
+    
+    return "".join(suggestions) if suggestions else ""
+
+def find_files(pattern: str = "*", search_type: str = "auto", max_results: int = 100) -> str:
     """
     Find files using various search methods
     
     Args:
         pattern: Search pattern (filename, glob pattern, or regex)
-        search_type: Type of search ("name", "glob", "regex", "content")
+        search_type: Type of search ("name", "glob", "regex", "content", "auto")
+                    "auto" will detect the best search type based on pattern
         max_results: Maximum number of results to return
     
     Returns:
@@ -26,6 +70,10 @@ def find_files(pattern: str = "*", search_type: str = "name", max_results: int =
         
         results = []
         project_path = Path(PROJECT_ROOT).resolve()
+        
+        # Auto-detect search type if "auto"
+        if search_type == "auto":
+            search_type = _auto_detect_search_type(pattern)
         
         if search_type == "name":
             # Search by filename (case-insensitive partial match)
@@ -90,11 +138,12 @@ def find_files(pattern: str = "*", search_type: str = "name", max_results: int =
                 if len(results) >= max_results:
                     break
         else:
-            return f"Invalid search_type: {search_type}. Use: name, glob, regex, or content"
+            return f"Invalid search_type: {search_type}. Use: auto, name, glob, regex, or content"
         
         # Format results
         if not results:
-            return f"No files found matching pattern '{pattern}' using {search_type} search"
+            suggestions = _get_search_suggestions(pattern, search_type)
+            return f"No files found matching pattern '{pattern}' using {search_type} search{suggestions}"
         
         result_text = f"Found {len(results)} file(s) matching '{pattern}' using {search_type} search:\n"
         for i, file_path in enumerate(results, 1):

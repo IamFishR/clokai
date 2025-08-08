@@ -1,0 +1,51 @@
+
+=== LLM Call 2025-08-09T00:45:53.774001 ===
+Interaction ID: 77
+Call Type: main
+System Prompt: You are Clokai, a local AI coding assistant with Claude Code-style capabilities. You operate entirely offline using advanced tool calling systems.
+
+# CONVERSATION FLOW (CRITICAL)
+Follow this pattern f...
+Full Prompt: System: You are Clokai, a local AI coding assistant with Claude Code-style capabilities. You operate entirely offline using advanced tool calling systems.
+
+# CONVERSATION FLOW (CRITICAL)
+Follow this pattern for interactions:
+
+1. **RESPOND NATURALLY**: Start with natural language explanation, reasoning, and context
+2. **USE TOOLS ONLY WHEN NEEDED**: Only use tools when the user specifically asks for file operations, code execution, or project analysis
+3. **NO UNNECESSARY TOOLS**: For greetings, g...
+Response: Hello! I can help you find the test files in your project. I'll use the `find_files` tool to locate them and then list the results.
+
+```json
+[
+ {"tool": "find_files", "args": {"pattern": "test", "search_type": "name", "max_results": 10}},
+ {"tool": "list_directory", "args": {"path": "."}}
+]
+```...
+Model: gemma3n:e2b
+Tokens: 413/55
+
+=== LLM Call 2025-08-09T00:46:51.482890 ===
+Interaction ID: 77
+Call Type: summary
+System Prompt: You are Clokai, a local AI coding assistant with Claude Code-style capabilities. You operate entirely offline using advanced tool calling systems.
+
+# CONVERSATION FLOW (CRITICAL)
+Follow this pattern f...
+Full Prompt: System: You are Clokai, a local AI coding assistant with Claude Code-style capabilities. You operate entirely offline using advanced tool calling systems.
+
+# CONVERSATION FLOW (CRITICAL)
+Follow this pattern for interactions:
+
+1. **RESPOND NATURALLY**: Start with natural language explanation, reasoning, and context
+2. **USE TOOLS ONLY WHEN NEEDED**: Only use tools when the user specifically asks for file operations, code execution, or project analysis
+3. **NO UNNECESSARY TOOLS**: For greetings, g...
+Response: Hello! I've found the following test files in your project:
+
+1.  `test.py`
+2.  `test_app.py`
+3.  `test_tools_only.py`
+
+I've listed them above. Let me know if you need me to do anything else with these files!...
+Model: gemma3n:e2b
+Tokens: 622/44

@@ -14,6 +14,10 @@ from dataclasses import dataclass, field
 from concurrent.futures import ThreadPoolExecutor, as_completed, Future
 from tools.tool_registry import TOOL_REGISTRY
 from llm.ollama_client import call_llm, call_llm_stream
+from tracking.tracker import tracker
+
+# Global token tracking for the session
+_session_token_counts = {"input": 0, "output": 0}
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +54,16 @@ class SmartToolSystem:
         self.cache = {}  # Simple result cache
         self.timeout_seconds = 30  # Tool execution timeout
         self.max_parallel = 3  # Max parallel tool executions
+        
+    def get_session_token_counts(self) -> tuple[int, int]:
+        """Get accumulated token counts for this session"""
+        global _session_token_counts
+        return _session_token_counts["input"], _session_token_counts["output"]
+    
+    def reset_session_token_counts(self):
+        """Reset token counts for new interaction"""
+        global _session_token_counts
+        _session_token_counts = {"input": 0, "output": 0}
         
     def process_user_request(self, user_input: str, messages: List[Dict]) -> tuple[str, List[ToolResult]]:
         """
@@ -156,7 +170,14 @@ class SmartToolSystem:
         """Get initial AI response without tools"""
         try:
             response_messages = messages + [{"role": "user", "content": user_input}]
-            return call_llm_stream(response_messages)
+            response, input_tokens, output_tokens = call_llm_stream(response_messages, call_type="main", call_sequence=1)
+            
+            # Track tokens globally for this session
+            global _session_token_counts
+            _session_token_counts["input"] += input_tokens
+            _session_token_counts["output"] += output_tokens
+            
+            return response
         except Exception as e:
             logger.error(f"Failed to get AI response: {e}")
             return "I'm having trouble processing your request right now."
@@ -164,7 +185,7 @@ class SmartToolSystem:
     def _needs_tools(self, user_input: str, ai_response: str) -> bool:
         """Smart detection of whether tools are needed"""
         
-        user_lower = user_input.lower()
+        user_lower = user_input.lower().strip()
         
         # Skip obviously non-tool requests
         greeting_patterns = [
@@ -175,6 +196,7 @@ class SmartToolSystem:
         ]
         
         if any(re.match(pattern, user_lower, re.IGNORECASE) for pattern in greeting_patterns):
+            print("[DEBUG] Greeting detected - skipping tools")
             return False
         
         # Skip general knowledge questions
@@ -229,9 +251,36 @@ class SmartToolSystem:
     def _parse_tools_from_response(self, response: str) -> List[ToolRequest]:
         """Parse tool requests directly from AI response if present"""
         try:
+            # Only look for tools if the response indicates actual tool usage
+            # Skip if it contains example keywords or is just explaining
+            response_lower = response.lower()
+            
+            # Skip if response contains example indicators
+            example_indicators = [
+                'example', 'for example', 'like this:', 'such as:',
+                'you could', 'you might', 'or perhaps', 'could you tell me',
+                'just let me know', 'do you have', 'what you\'d like'
+            ]
+            
+            if any(indicator in response_lower for indicator in example_indicators):
+                return []
+            
             # Look for JSON arrays in the response
             json_match = re.search(r'\[[\s\S]*?\]', response, re.DOTALL)
             if not json_match:
+                return []
+            
+            # Check if JSON is preceded by tool execution indicators
+            json_start = json_match.start()
+            before_json = response[:json_start].lower()
+            
+            # Only parse if there are clear tool execution indicators
+            execution_indicators = [
+                'let me', 'i\'ll', 'i will', 'executing', 'running',
+                'tool_call:', 'function_calls', 'invoke'
+            ]
+            
+            if not any(indicator in before_json for indicator in execution_indicators):
                 return []
             
             tools_data = json.loads(json_match.group())
@@ -255,21 +304,28 @@ class SmartToolSystem:
     def _extract_tool_requests(self, user_input: str, initial_response: str, messages: List[Dict]) -> List[ToolRequest]:
         """Extract tool requests using AI"""
         
-        tool_prompt = f"""Based on this conversation, determine what tools should be used.
+        tool_prompt = f"""You are a tool extraction assistant. Analyze the user's request and determine what tools should be used.
 
-User request: {user_input}
-Your initial response: {initial_response}
+User request: "{user_input}"
+Initial AI response: "{initial_response}"
 
-Available tools:
-- read_file: Read file contents (args: path)
-- write_file: Writes content to a file, creating it if it doesn't exist or overwriting it if it does. (args: path, content)
-- edit_file: Edit existing files (args: path, action, content, match_text, start_line, end_line). For 'replace_range', if start_line and end_line are omitted, the entire file is replaced.
-- run_command: Execute shell commands (args: cmd, timeout)
-- find_files: Search for files (args: pattern, search_type, max_results)
-- list_directory: List directory contents (args: path)
+Available tools and their uses:
+- read_file: Read file contents (args: path) - Use when user wants to see/read/view/examine any file
+- write_file: Create new files (args: path, content) - Use when user wants to create/write new files
+- edit_file: Edit existing files (args: path, action, content) - Use when user wants to modify existing files
+- run_command: Execute shell commands (args: cmd) - Use when user wants to run/execute commands
+- find_files: Search for files (args: pattern) - Use when user wants to find/search for files
+- list_directory: List directory contents (args: path) - Use when user wants to list/see directory contents
 
-Respond with a JSON array of tool requests in this exact format:
-[{{"tool": "tool_name", "args": {{"key": "value"}}}}] 
+CRITICAL: If the user mentions reading, viewing, showing, or examining ANY file (like "read config.py", "show the file", "view main.py"), you MUST use read_file tool.
+
+Examples:
+- "read config.py" -> [{{"tool": "read_file", "args": {{"path": "config.py"}}}}]
+- "show me the main.py file" -> [{{"tool": "read_file", "args": {{"path": "main.py"}}}}]
+- "list files in src/" -> [{{"tool": "list_directory", "args": {{"path": "src/"}}}}]
+
+Respond with ONLY a JSON array of tool requests:
+[{{"tool": "tool_name", "args": {{"key": "value"}}}}]
 
 If no tools are needed, respond with: []
 """
@@ -277,15 +333,21 @@ If no tools are needed, respond with: []
         try:
             tool_messages = messages + [{"role": "system", "content": tool_prompt}]
             print("[TOOLS] Analyzing what tools are needed...")
-            response = call_llm(tool_messages)
+            response, input_tokens, output_tokens = call_llm(tool_messages, call_type="tool_extraction", call_sequence=2)
+            
+            # Track tokens globally
+            global _session_token_counts
+            _session_token_counts["input"] += input_tokens
+            _session_token_counts["output"] += output_tokens
             
             # Extract JSON from response
             json_match = re.search(r'\[.*\]', response, re.DOTALL)
             if not json_match:
                 print("[TOOLS] No tool requests found in AI response")
                 return []
-                
-            tools_data = json.loads(json_match.group())
+            
+            json_text = json_match.group()
+            tools_data = json.loads(json_text)
             
             requests = []
             for tool_data in tools_data:
@@ -369,6 +431,66 @@ If no tools are needed, respond with: []
         
         return results
     
+    def _track_file_snapshots(self, tool_call_id: int, request: ToolRequest, result_data: Any):
+        """Track file snapshots for write operations"""
+        try:
+            from pathlib import Path
+            from config import PROJECT_ROOT
+            
+            if request.action == 'write_file':
+                file_path = request.params.get('path', '')
+                content = request.params.get('content', '')
+                full_path = Path(PROJECT_ROOT) / file_path
+                
+                # Get original content if file exists
+                original_content = ""
+                if full_path.exists():
+                    try:
+                        with open(full_path, "r", encoding='utf-8') as f:
+                            original_content = f.read()
+                    except:
+                        original_content = ""
+                
+                # Track snapshots
+                tracker.track_file_snapshot(tool_call_id, str(full_path), "before", original_content)
+                tracker.track_file_snapshot(tool_call_id, str(full_path), "after", content)
+                
+            elif request.action == 'edit_file':
+                # Handle edit_file snapshots similarly
+                file_path = request.params.get('path', '')
+                full_path = Path(PROJECT_ROOT) / file_path
+                
+                # For edit operations, we'd need to capture before/after from the tool result
+                # This is more complex and might need tool-specific handling
+                pass
+                
+        except Exception as e:
+            logger.error(f"Failed to track file snapshots: {e}")
+    
+    def _track_command_execution(self, tool_call_id: int, request: ToolRequest, result_data: Any):
+        """Track command execution details"""
+        try:
+            # Check if result_data has command execution details
+            if hasattr(result_data, '_cmd_details'):
+                details = result_data._cmd_details
+                tracker.track_command_execution(
+                    tool_call_id, 
+                    details['command'], 
+                    details['returncode'], 
+                    details['stdout'], 
+                    details['stderr'], 
+                    0  # execution time already tracked in tool call
+                )
+            else:
+                # Fallback if no structured data
+                cmd = request.params.get('command', '')
+                tracker.track_command_execution(
+                    tool_call_id, cmd, 0, str(result_data), "", 0
+                )
+                
+        except Exception as e:
+            logger.error(f"Failed to track command execution: {e}")
+    
     def _execute_single_tool(self, request: ToolRequest) -> ToolResult:
         """Execute a single tool with caching and error handling"""
         print(f"[DEBUG] Executing single tool: {request.action}")
@@ -396,12 +518,35 @@ If no tools are needed, respond with: []
             # Execute tool
             result_data = tool_func(**request.params)
             
+            execution_time_ms = int((time.time() - start_time) * 1000)
+            
             result = ToolResult(
                 request=request,
                 success=True,
                 result=result_data,
                 execution_time=time.time() - start_time
             )
+            
+            # Track tool execution
+            try:
+                tool_call_id = tracker.track_tool_call(
+                    tool_name=request.action,
+                    input_data=request.params,
+                    output_data=result_data,
+                    execution_time_ms=execution_time_ms,
+                    status='success'
+                )
+                
+                # Handle file snapshots for write operations
+                if request.action in ['write_file', 'edit_file'] and tool_call_id:
+                    self._track_file_snapshots(tool_call_id, request, result_data)
+                
+                # Handle command execution tracking
+                elif request.action == 'run_command' and tool_call_id:
+                    self._track_command_execution(tool_call_id, request, result_data)
+                
+            except Exception as e:
+                logger.error(f"Failed to track tool call: {e}")
             
             # Cache successful results (for read operations only)
             if request.action in ['read_file', 'list_directory', 'find_files']:
@@ -410,6 +555,21 @@ If no tools are needed, respond with: []
             return result
             
         except Exception as e:
+            execution_time_ms = int((time.time() - start_time) * 1000)
+            
+            # Track failed tool execution
+            try:
+                tracker.track_tool_call(
+                    tool_name=request.action,
+                    input_data=request.params,
+                    output_data=None,
+                    execution_time_ms=execution_time_ms,
+                    status='error',
+                    error_message=str(e)
+                )
+            except Exception as track_error:
+                logger.error(f"Failed to track failed tool call: {track_error}")
+            
             return ToolResult(
                 request=request,
                 success=False,
@@ -455,7 +615,12 @@ If no correction is possible, respond with: []
         
         try:
             correction_messages = messages + [{"role": "system", "content": correction_prompt}]
-            response = call_llm(correction_messages)
+            response, input_tokens, output_tokens = call_llm(correction_messages, call_type="correction", call_sequence=3)
+            
+            # Track tokens globally
+            global _session_token_counts
+            _session_token_counts["input"] += input_tokens
+            _session_token_counts["output"] += output_tokens
             
             # Extract corrected requests
             json_match = re.search(r'\[.*\]', response, re.DOTALL)
@@ -525,7 +690,14 @@ Please provide a clear, helpful response that incorporates the tool results.
         
         try:
             summary_messages = messages + [{"role": "system", "content": summary_prompt}]
-            return call_llm_stream(summary_messages)
+            response, input_tokens, output_tokens = call_llm_stream(summary_messages, call_type="summary", call_sequence=4)
+            
+            # Track tokens globally
+            global _session_token_counts
+            _session_token_counts["input"] += input_tokens
+            _session_token_counts["output"] += output_tokens
+            
+            return response
         except Exception as e:
             logger.error(f"Failed to generate summary: {e}")
             return initial_response + f"\n\nTool execution completed with {len([r for r in results if r.success])} successful operations."
