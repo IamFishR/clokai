@@ -111,9 +111,13 @@ class SmartToolSystem:
                 if corrected_results:
                     results = corrected_results
             
-            # Step 7: Generate AI summary
-            print(f"[DEBUG] Generating summary with {len(results)} results")
-            final_response = self._generate_summary(user_input, initial_response, results, messages)
+            # Step 7: Generate AI summary only if we have tool results
+            if results and any(r.success for r in results):
+                print(f"[DEBUG] Generating summary with {len(results)} results")
+                final_response = self._generate_summary(user_input, initial_response, results, messages)
+            else:
+                # If no successful tools, just return the initial response
+                final_response = initial_response
             
             print(f"[DEBUG] Returning final_response and {len(results)} results")
             return final_response, results
@@ -672,20 +676,33 @@ If no correction is possible, respond with: []
                 # Handle both claude_tool_system.ToolResult and smart_tool_system.ToolResult
                 tool_name = result.tool_call.name if hasattr(result, 'tool_call') else result.request.action
                 results_text.append(f"Tool: {tool_name} - {status}")
-                results_text.append(f"Result: {str(result.result)[:500]}...")  # Limit result size
+                # Include more of the result for better context
+                result_str = str(result.result)
+                if len(result_str) > 500:
+                    result_str = result_str[:500] + "..."
+                results_text.append(f"Result: {result_str}")
             else:
                 tool_name = result.tool_call.name if hasattr(result, 'tool_call') else result.request.action
                 results_text.append(f"Tool: {tool_name} - FAILED: {result.error}")
         
-        summary_prompt = f"""Based on the tool execution results, provide a helpful response to the user.
+        # Check if initial response already included tool execution results
+        # If it did, don't generate a new summary to avoid duplication
+        initial_lower = initial_response.lower()
+        if any(phrase in initial_lower for phrase in [
+            "here's a list", "found the following", "okay, here's", "here are the",
+            "i found", "these files", "these are the", "results:"
+        ]):
+            # Initial response already included results, just return it
+            return initial_response
+        
+        summary_prompt = f"""Based on the tool execution results, provide a clear and direct answer to the user's request.
 
 User request: {user_input}
-Your initial response: {initial_response}
 
 Tool execution results:
 {chr(10).join(results_text)}
 
-Please provide a clear, helpful response that incorporates the tool results.
+IMPORTANT: Be concise and direct. Present the results clearly without unnecessary explanation unless specifically requested by the user.
 """
         
         try:

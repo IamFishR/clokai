@@ -1,5 +1,5 @@
 OLLAMA_API_URL = "http://localhost:11434/api/generate"
-MODEL_NAME = "gemma3n:e2b"
+MODEL_NAME = "gemma-3n-e2b-it:latest"
 CHUNK_SIZE = 100
 PROJECT_ROOT = "."
 
