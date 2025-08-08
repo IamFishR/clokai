@@ -305,9 +305,9 @@ class ClaudeToolSystem:
             
         elif tool_name == "write_file":
             path = args.get("path") or args.get("arg1")
-            content = args.get("content") or args.get("edits") or args.get("arg2")
-            if not path or content is None:
-                raise ValueError("Missing 'path' or 'content' parameter")
+            content = args.get("content") or args.get("edits") or args.get("arg2", "")
+            if not path:
+                raise ValueError("Missing 'path' parameter")
             return tool_func(path, content)
             
         elif tool_name == "edit_file":
@@ -318,8 +318,8 @@ class ClaudeToolSystem:
             start_line = args.get("start_line")
             end_line = args.get("end_line")
             
-            if not path or not action or content is None:
-                raise ValueError("Missing required parameters (path, action, content)")
+            if not path or not action:
+                raise ValueError("Missing required parameters (path, action)")
             return tool_func(path, action, content, match_text, start_line, end_line)
             
         elif tool_name == "run_command":

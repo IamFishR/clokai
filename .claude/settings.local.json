@@ -14,7 +14,9 @@
       "Bash(move:*)",
       "Bash(copy:*)",
       "Bash(cp:*)",
-      "Bash(del debug_tool_parsing.py test_enhanced_intent.py test_smart_system.py)"
+      "Bash(del debug_tool_parsing.py test_enhanced_intent.py test_smart_system.py)",
+      "Bash(timeout:*)",
+      "Bash(del test_tool_system.py test_direct_tools.py)"
     ],
     "deny": []
   }

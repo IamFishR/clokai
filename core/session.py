@@ -5,6 +5,7 @@ from tracking.tracker import tracker
 from database.connection import db_connection
 from core.rich_cli import rich_cli
 from core.smart_tool_system import smart_tool_system
+from core.claude_tool_system import claude_tool_system, ToolCall
 
 # Setup logging - reduce noise in CLI
 logging.basicConfig(level=logging.WARNING)
@@ -88,52 +89,40 @@ You don't need to explicitly call tools - just respond naturally and the system 
         try:
             # Use the smart tool system for processing
             print("[PROCESSING] Analyzing your request...")
-            print("[DEBUG] About to call smart_tool_system.process_user_request")
             
-            final_response, tool_results = smart_tool_system.process_user_request(user_input, messages)
-            print("[DEBUG] smart_tool_system.process_user_request completed")
+            initial_response, tool_requests = smart_tool_system.process_user_request(user_input, messages)
             
+            tool_results = None
+            if tool_requests:
+                tool_calls = [ToolCall(name=req.request.action, args=req.request.params) for req in tool_requests]
+                tool_results = claude_tool_system.execute_tools_parallel(tool_calls)
+
+            # Generate final response
+            final_response = smart_tool_system._generate_summary(user_input, initial_response, tool_results, messages)
+
             # Add the final response to conversation history
             messages.append({"role": "assistant", "content": final_response})
             
             # Display the response
             rich_cli.console.print(f"\n[bold green]Clokai[/bold green]: {final_response}")
             
-            # Show tool results summary if any
-            if tool_results:
-                print("[DEBUG] Tool results found")
-                successful_tools = [r for r in tool_results if r.success]
-                failed_tools = [r for r in tool_results if not r.success]
-                
-                summary_parts = []
-                if successful_tools:
-                    summary_parts.append(f"{len(successful_tools)} successful")
-                if failed_tools:
-                    summary_parts.append(f"{len(failed_tools)} failed")
-                
-                if summary_parts:
-                    rich_cli.console.print(f"[dim]Tools executed: {', '.join(summary_parts)}[/dim]")
-            
             # Complete tracking the interaction
             try:
                 from config import MODEL_NAME
-                print("[DEBUG] Completing tracking interaction")
                 tracker.complete_interaction(final_response, MODEL_NAME)
             except Exception as e:
-                print(f"[ERROR] Failed to complete tracking interaction: {e}")
                 logger.error(f"Failed to complete tracking interaction: {e}")
                 
         except Exception as e:
             error_msg = f"Error processing request: {e}"
             rich_cli.show_error(error_msg)
-            print("[DEBUG] Tracking error interaction")
             # Track the error
             try:
                 from config import MODEL_NAME
-                print("[DEBUG] Tracking error interaction")
                 tracker.complete_interaction("", MODEL_NAME, error_message=str(e))
             except Exception as track_error:
-                print(f"[ERROR] Failed to track error: {track_error}")
                 logger.error(f"Failed to track error: {track_error}")
     
     rich_cli.console.print("\n[bold green]Thanks for using Clokai! Session ended.[/bold green]")
+
+

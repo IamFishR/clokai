@@ -56,45 +56,37 @@ def read_file(path):
 
 def write_file(path, content):
     """
-    Create new files only. Use edit_file for modifying existing files.
-    
+    Writes content to a file, creating it if it doesn't exist or overwriting it if it does.
+
     Args:
-        path: File path relative to PROJECT_ROOT
-        content: Content to write to the new file
+        path: File path relative to PROJECT_ROOT.
+        content: The content to write to the file.
     """
     start_time = time.time()
     
     try:
         full_path = Path(PROJECT_ROOT) / path
         
-        # Check if file already exists - prevent editing existing files
-        if full_path.exists():
-            result = f"File {path} already exists. Use edit_file tool for modifying existing files."
-            execution_time = int((time.time() - start_time) * 1000)
-            
-            tracker.track_tool_call(
-                "write_file", 
-                {"path": path, "content": content[:100] + "..." if len(content) > 100 else content}, 
-                result, 
-                execution_time,
-                status="error",
-                error_message="File already exists"
-            )
-            return result
-        
-        # Create parent directories if they don't exist
+        # Ensure parent directory exists
         full_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # Write new content (content is now always a string)
-        new_content = content
+        # Read original content if file exists
+        original_content = ""
+        if full_path.exists():
+            with open(full_path, "r", encoding='utf-8') as f:
+                original_content = f.read()
         
         # Write new content
         with open(full_path, "w", encoding='utf-8') as f:
-            f.write(new_content)
+            f.write(content)
         
         execution_time = int((time.time() - start_time) * 1000)
-        result = f"File {path} created successfully."
         
+        if original_content:
+            result = f"File {path} updated successfully."
+        else:
+            result = f"File {path} created successfully."
+            
         # Track successful tool call
         tool_call_id = tracker.track_tool_call(
             "write_file", 
@@ -103,11 +95,11 @@ def write_file(path, content):
             execution_time
         )
         
-        # Track file snapshots  
+        # Track file snapshots
         if tool_call_id:
-            tracker.track_file_snapshot(tool_call_id, str(full_path), "before", "")
-            tracker.track_file_snapshot(tool_call_id, str(full_path), "after", new_content)
-        
+            tracker.track_file_snapshot(tool_call_id, str(full_path), "before", original_content)
+            tracker.track_file_snapshot(tool_call_id, str(full_path), "after", content)
+            
         return result
         
     except Exception as e:
@@ -209,18 +201,19 @@ def edit_file(path, action, content, match_text=None, start_line=None, end_line=
                 
         elif action == "replace_range":
             if start_line is None or end_line is None:
-                raise ValueError("Both start_line and end_line must be provided for replace_range")
-            
-            # Convert to 0-based indexing
-            start_idx = start_line - 1
-            end_idx = end_line - 1
-            
-            if start_idx < 0 or end_idx >= len(lines) or start_idx > end_idx:
-                raise ValueError(f"Invalid line range: {start_line}-{end_line}")
-            
-            # Replace the range with new content (split by lines if multiline)
-            content_lines = content.splitlines()
-            new_lines[start_idx:end_idx + 1] = content_lines
+                # If no line numbers are provided, replace the entire file content
+                new_lines = content.splitlines()
+            else:
+                # Convert to 0-based indexing
+                start_idx = start_line - 1
+                end_idx = end_line - 1
+                
+                if start_idx < 0 or end_idx >= len(lines) or start_idx > end_idx:
+                    raise ValueError(f"Invalid line range: {start_line}-{end_line}")
+                
+                # Replace the range with new content (split by lines if multiline)
+                content_lines = content.splitlines()
+                new_lines[start_idx:end_idx + 1] = content_lines
             
         else:
             raise ValueError(f"Invalid action: {action}. Must be one of: insert_before, insert_after, replace_range, append_to_end")

@@ -262,14 +262,14 @@ Your initial response: {initial_response}
 
 Available tools:
 - read_file: Read file contents (args: path)
-- write_file: Create new files (args: path, content)  
-- edit_file: Edit existing files (args: path, action, content, match_text, start_line, end_line)
+- write_file: Writes content to a file, creating it if it doesn't exist or overwriting it if it does. (args: path, content)
+- edit_file: Edit existing files (args: path, action, content, match_text, start_line, end_line). For 'replace_range', if start_line and end_line are omitted, the entire file is replaced.
 - run_command: Execute shell commands (args: cmd, timeout)
 - find_files: Search for files (args: pattern, search_type, max_results)
 - list_directory: List directory contents (args: path)
 
 Respond with a JSON array of tool requests in this exact format:
-[{{"tool": "tool_name", "args": {{"key": "value"}}}}]
+[{{"tool": "tool_name", "args": {{"key": "value"}}}}] 
 
 If no tools are needed, respond with: []
 """
@@ -324,6 +324,7 @@ If no tools are needed, respond with: []
     
     def _execute_tools_with_progress(self, tool_requests: List[ToolRequest]) -> List[ToolResult]:
         """Execute tools with progress indication and parallel processing"""
+        print("[DEBUG] Entering _execute_tools_with_progress")
         
         if not tool_requests:
             return []
@@ -370,6 +371,7 @@ If no tools are needed, respond with: []
     
     def _execute_single_tool(self, request: ToolRequest) -> ToolResult:
         """Execute a single tool with caching and error handling"""
+        print(f"[DEBUG] Executing single tool: {request.action}")
         
         start_time = time.time()
         
@@ -439,14 +441,14 @@ Failed tools:
 
 Available tools:
 - read_file: Read file contents (args: path)
-- write_file: Create new files (args: path, content)  
-- edit_file: Edit existing files (args: path, action, content, match_text, start_line, end_line)
+- write_file: Writes content to a file, creating it if it doesn't exist or overwriting it if it does. (args: path, content)
+- edit_file: Edit existing files (args: path, action, content, match_text, start_line, end_line). For 'replace_range', if start_line and end_line are omitted, the entire file is replaced.
 - run_command: Execute shell commands (args: cmd, timeout)
 - find_files: Search for files (args: pattern, search_type, max_results)
 - list_directory: List directory contents (args: path)
 
 Provide corrected tool requests as JSON array:
-[{{"tool": "tool_name", "args": {{"key": "value"}}}}]
+[{{"tool": "tool_name", "args": {{"key": "value"}}}}] 
 
 If no correction is possible, respond with: []
 """
@@ -499,12 +501,16 @@ If no correction is possible, respond with: []
         for result in results:
             if result.success:
                 status = "SUCCESS"
-                if result.cached:
+                # Check if result has cached attribute (handle both ToolResult types)
+                if hasattr(result, 'cached') and result.cached:
                     status += " (cached)"
-                results_text.append(f"Tool: {result.request.action} - {status}")
+                # Handle both claude_tool_system.ToolResult and smart_tool_system.ToolResult
+                tool_name = result.tool_call.name if hasattr(result, 'tool_call') else result.request.action
+                results_text.append(f"Tool: {tool_name} - {status}")
                 results_text.append(f"Result: {str(result.result)[:500]}...")  # Limit result size
             else:
-                results_text.append(f"Tool: {result.request.action} - FAILED: {result.error}")
+                tool_name = result.tool_call.name if hasattr(result, 'tool_call') else result.request.action
+                results_text.append(f"Tool: {tool_name} - FAILED: {result.error}")
         
         summary_prompt = f"""Based on the tool execution results, provide a helpful response to the user.
 
