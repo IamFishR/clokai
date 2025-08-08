@@ -125,7 +125,9 @@ def call_llm_stream(messages, max_retries=2):
             response.raise_for_status()
             
             full_response = ""
-            print("Clokai: ", end="", flush=True)
+            # Import here to avoid circular import
+            from core.rich_cli import rich_cli
+            rich_cli.show_ai_response_start()
             display_buffer = ""
             in_think_block = False
             
@@ -144,7 +146,7 @@ def call_llm_stream(messages, max_retries=2):
                                 if not in_think_block and '<think>' in display_buffer:
                                     # Found start of think block
                                     before_think = display_buffer[:display_buffer.index('<think>')]
-                                    print(before_think, end="", flush=True)
+                                    rich_cli.stream_ai_response(before_think)
                                     display_buffer = display_buffer[display_buffer.index('<think>'):]
                                     in_think_block = True
                                 elif in_think_block and '</think>' in display_buffer:
@@ -154,7 +156,7 @@ def call_llm_stream(messages, max_retries=2):
                                 else:
                                     # No think tags, print if not in think block
                                     if not in_think_block:
-                                        print(display_buffer, end="", flush=True)
+                                        rich_cli.stream_ai_response(display_buffer)
                                         display_buffer = ""
                                     break
                         
@@ -165,9 +167,9 @@ def call_llm_stream(messages, max_retries=2):
             
             # Print any remaining buffer (if not in think block)
             if not in_think_block and display_buffer:
-                print(display_buffer, end="", flush=True)
+                rich_cli.stream_ai_response(display_buffer)
             
-            print()  # New line after streaming
+            rich_cli.show_ai_response_end()  # New line after streaming
             
             # Clean the full response
             cleaned_response = clean_response(full_response)

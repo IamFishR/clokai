@@ -65,6 +65,7 @@ class InteractionTracker:
                            error_message: Optional[str] = None):
         """Complete the current interaction with results"""
         if not self.current_interaction_id or not self.interaction_start_time:
+            print("[ERROR] No active interaction to complete.")
             return
         
         processing_time_ms = int((time.time() - self.interaction_start_time) * 1000)
@@ -93,11 +94,13 @@ class InteractionTracker:
         except Exception as e:
             logger.error(f"Failed to complete tracking interaction: {e}")
     
+    print("Tracking interaction completed successfully.")
     def track_tool_call(self, tool_name: str, input_data: Dict[str, Any], 
                        output_data: Any, execution_time_ms: int,
                        status: str = 'success', error_message: Optional[str] = None) -> int:
         """Track a tool execution"""
         if not self.current_interaction_id:
+            print("[ERROR] No active interaction to track tool call.")
             return None
         
         try:

@@ -88,10 +88,8 @@ You don't need to explicitly call tools - just respond naturally and the system 
         try:
             # Use the smart tool system for processing
             print("[PROCESSING] Analyzing your request...")
-            print("[DEBUG] About to call smart_tool_system.process_user_request")
             
             final_response, tool_results = smart_tool_system.process_user_request(user_input, messages)
-            print("[DEBUG] smart_tool_system.process_user_request completed")
             
             # Add the final response to conversation history
             messages.append({"role": "assistant", "content": final_response})
@@ -101,7 +99,6 @@ You don't need to explicitly call tools - just respond naturally and the system 
             
             # Show tool results summary if any
             if tool_results:
-                print("[DEBUG] Tool results found")
                 successful_tools = [r for r in tool_results if r.success]
                 failed_tools = [r for r in tool_results if not r.success]
                 
@@ -117,23 +114,19 @@ You don't need to explicitly call tools - just respond naturally and the system 
             # Complete tracking the interaction
             try:
                 from config import MODEL_NAME
-                print("[DEBUG] Completing tracking interaction")
                 tracker.complete_interaction(final_response, MODEL_NAME)
             except Exception as e:
-                print(f"[ERROR] Failed to complete tracking interaction: {e}")
                 logger.error(f"Failed to complete tracking interaction: {e}")
                 
         except Exception as e:
             error_msg = f"Error processing request: {e}"
             rich_cli.show_error(error_msg)
-            print("[DEBUG] Tracking error interaction")
+            
             # Track the error
             try:
                 from config import MODEL_NAME
-                print("[DEBUG] Tracking error interaction")
                 tracker.complete_interaction("", MODEL_NAME, error_message=str(e))
             except Exception as track_error:
-                print(f"[ERROR] Failed to track error: {track_error}")
                 logger.error(f"Failed to track error: {track_error}")
     
     rich_cli.console.print("\n[bold green]Thanks for using Clokai! Session ended.[/bold green]")

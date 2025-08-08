@@ -69,3 +69,11 @@ Tool validation can be configured in `config.py`:
 ### CLI Commands
 - `/tool_report`: Display validation and performance statistics
 - `/help`: Show available CLI commands
+
+## Test File Creation Guidelines
+
+- When creating test files, do not write static code in test files
+- Let the AI handle most of the code generation
+- Provide only natural language descriptions and requirements for test scenarios
+- do not ever add unicode charecter in strings or in commants or in code. it is breaking in the windows
+- you are creating testing py file. later delete them once everythings success.

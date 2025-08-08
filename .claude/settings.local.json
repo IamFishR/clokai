@@ -9,7 +9,12 @@
       "Bash(del test_fixed_chat.py final_test.py quick_test.py test_natural_conversation.py)",
       "Bash(rm:*)",
       "Bash(find:*)",
-      "Bash(del \"C:\\tracking\\pcli\\clokai\\test_validation.py\")"
+      "Bash(del \"C:\\tracking\\pcli\\clokai\\test_validation.py\")",
+      "Bash(mv:*)",
+      "Bash(move:*)",
+      "Bash(copy:*)",
+      "Bash(cp:*)",
+      "Bash(del debug_tool_parsing.py test_enhanced_intent.py test_smart_system.py)"
     ],
     "deny": []
   }

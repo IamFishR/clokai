@@ -1,3 +1,5 @@
 requests
 pymysql
 sqlalchemy
+rich
+colorama
